@@ -1,4 +1,4 @@
-# Door-Sync CiviRules Webhook (`com.tvcog.doorsync`)
+# Door-Sync CiviRules Webhook (`net.tvcog.doorsync`)
 
 A CiviCRM extension that adds a **CiviRules action** — *"Send door-sync
 membership webhook"* — which POSTs an HMAC-signed event to the
@@ -37,13 +37,13 @@ Drop this directory into your CiviCRM extensions directory (or `git clone` it
 there) and enable it:
 
 ```bash
-cv ext:enable com.tvcog.doorsync
+cv ext:enable net.tvcog.doorsync
 ```
 
 Enabling runs `doorsync_civicrm_install()`, which registers the action from
 `civirules_actions.json` via `CRM_Civirules_Utils_Upgrader::insertActionsFromJson`.
 
-> If you prefer a civix-managed skeleton, run `civix generate:module com.tvcog.doorsync`
+> If you prefer a civix-managed skeleton, run `civix generate:module net.tvcog.doorsync`
 > and copy `CRM/CivirulesActions/DoorSync/*`, `civirules_actions.json`, and
 > `settings/doorsync.setting.php` into it. The action classes and registration
 > logic here are drop-in compatible.
