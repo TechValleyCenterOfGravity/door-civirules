@@ -1,0 +1,7 @@
+[
+  {
+    "name": "doorsync_membership_webhook",
+    "label": "Send door-sync membership webhook",
+    "class_name": "CRM_CivirulesActions_DoorSync_MembershipWebhook"
+  }
+]
