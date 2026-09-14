@@ -22,10 +22,10 @@ class CRM_CivirulesActions_DoorSync_MembershipWebhook extends CRM_CivirulesActio
    * @return array
    */
   protected function buildPayload(CRM_Civirules_TriggerData_TriggerData $triggerData) {
-    return [
-      'contact_id' => (int) $triggerData->getContactId(),
-      'occurred_at' => time(),
-    ];
+    return CRM_CivirulesActions_DoorSync_Contract::membershipPayload(
+      $triggerData->getContactId(),
+      time()
+    );
   }
 
   /**
