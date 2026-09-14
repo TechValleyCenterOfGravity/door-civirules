@@ -20,7 +20,7 @@
   <requires>
     <ext>org.civicoop.civirules</ext>
   </requires>
-  <comments>Requires the CiviRules extension (org.civicoop.civirules). Set the Worker URL and HMAC secret in Administer &gt; System Settings, or via cv (see README).</comments>
+  <comments>Requires the CiviRules extension (org.civicoop.civirules). Set the Worker URL and HMAC secret at Administer &gt; System Settings &gt; Door-Sync CiviRules Webhook Settings, or via cv (see README).</comments>
   <classloader>
     <psr0 prefix="CRM_" path="."/>
     <psr4 prefix="Civi\" path="Civi"/>
@@ -30,5 +30,6 @@
   </civix>
   <mixins>
     <mixin>setting-php@1.0.0</mixin>
+    <mixin>setting-admin@1.0.0</mixin>
   </mixins>
 </extension>
