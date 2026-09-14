@@ -74,6 +74,10 @@ GitHub release:
 git tag v1.1.0 && git push origin v1.1.0
 ```
 
+Publishing a release from the GitHub UI works too: that creates the tag, which
+triggers the same workflow, and the package is attached to the release you made
+rather than a second one being created.
+
 The package is `git archive` filtered through the `export-ignore` rules in
 `.gitattributes`, so it contains only the files a CiviCRM site needs —
 `info.xml`, `doorsync.php`, `civirules_actions.json`, `CRM/`, `settings/` and

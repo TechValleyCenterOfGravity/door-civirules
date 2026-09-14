@@ -161,7 +161,7 @@ jobs:
         with:
           name: ${{ needs.package.outputs.key }}-${{ needs.package.outputs.version }}
 
-      - name: Create release
+      - name: Create or update the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -170,4 +170,16 @@ jobs:
           TITLE: ${{ needs.package.outputs.key }} ${{ needs.package.outputs.version }}
         run: |
           test -f "$ZIP" || { echo "::error::$ZIP missing from the artifact"; exit 1; }
-          gh release create "$TAG" "$ZIP" --title "$TITLE" --generate-notes
+
+          # The release may already exist. Publishing one from the GitHub UI
+          # creates the tag as a side effect, and this workflow then fires on
+          # that tag push — so `gh release create` would fail on a release the
+          # user just made deliberately. Attach the package to whatever is
+          # there instead. --clobber also makes re-running this job idempotent.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; attaching the package to it."
+            gh release upload "$TAG" "$ZIP" --clobber
+          else
+            echo "Creating release $TAG."
+            gh release create "$TAG" "$ZIP" --title "$TITLE" --generate-notes
+          fi
