@@ -1,0 +1,20 @@
+{
+  "name": "tvcog/door-civirules",
+  "description": "CiviRules action that POSTs an HMAC-signed webhook to the door-webhook Cloudflare Worker.",
+  "license": "AGPL-3.0-or-later",
+  "autoload": {
+    "psr-0": {
+      "CRM_": ""
+    }
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11.5"
+  },
+  "scripts": {
+    "test": "phpunit",
+    "gen-vector": "php bin/gen-vector.php"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}

@@ -4,10 +4,10 @@
  * Base CiviRules action that POSTs an HMAC-signed payload to the door-webhook
  * Cloudflare Worker. Subclasses supply the endpoint path and the payload.
  *
- * The signature scheme matches the Worker and the door-sync Python receiver:
- *   X-Door-Sync-Timestamp: <unix seconds>
- *   X-Door-Sync-Signature: sha256=<hex>
- *   hex = HMAC_SHA256(secret, "<timestamp>." + rawBody)
+ * The wire format — payload shape, JSON encoding, signature and headers — lives
+ * in CRM_CivirulesActions_DoorSync_Contract, which is dependency-free so it can
+ * be unit-tested and regenerated against the Worker's golden vector without a
+ * CiviCRM bootstrap. This class only handles settings, transport and logging.
  *
  * No PII in logs — contact_id only (matches the door-sync no-PII convention).
  */
@@ -41,8 +41,12 @@ abstract class CRM_CivirulesActions_DoorSync_Base extends CRM_Civirules_Action {
 
   /**
    * Fire the webhook. Failures are logged, never thrown: the Worker's queue
-   * owns delivery durability, and a webhook hiccup must not break the CiviCRM
-   * request (e.g. the membership edit) that triggered it.
+   * owns delivery durability once the request lands, and a webhook hiccup must
+   * not break the CiviCRM request (e.g. the membership edit) that triggered it.
+   *
+   * Note that a request that never lands is dropped here — the event is not
+   * retried from CiviCRM. Door access for that contact then stays stale until
+   * door-sync's next scheduled reconcile.
    *
    * @param CRM_Civirules_TriggerData_TriggerData $triggerData
    */
@@ -56,20 +60,17 @@ abstract class CRM_CivirulesActions_DoorSync_Base extends CRM_Civirules_Action {
       return;
     }
 
-    $body = json_encode($this->buildPayload($triggerData), JSON_UNESCAPED_SLASHES);
+    // Encode once: the signature covers these exact bytes, so the same string
+    // must be both signed and sent.
+    $body = CRM_CivirulesActions_DoorSync_Contract::encodeBody($this->buildPayload($triggerData));
     $timestamp = (string) time();
-    $signature = hash_hmac('sha256', $timestamp . '.' . $body, $secret);
     $url = $baseUrl . $this->getEventPath();
 
     try {
       $client = new GuzzleHttp\Client(['timeout' => 5, 'connect_timeout' => 3]);
       $client->post($url, [
         'body' => $body,
-        'headers' => [
-          'Content-Type' => 'application/json',
-          'X-Door-Sync-Timestamp' => $timestamp,
-          'X-Door-Sync-Signature' => 'sha256=' . $signature,
-        ],
+        'headers' => CRM_CivirulesActions_DoorSync_Contract::headers($secret, $timestamp, $body),
       ]);
     }
     catch (Throwable $e) {

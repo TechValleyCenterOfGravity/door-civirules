@@ -23,8 +23,46 @@ X-Door-Sync-Signature: sha256=<hex>
 hex = HMAC_SHA256(secret, "<timestamp>." + rawBody)
 ```
 
-The payload is minimal — `{"contact_id": <int>, "occurred_at": <unix>}` — because
-door-sync always runs a whole-population reconcile; no other member data is sent.
+The payload is minimal — `{"contact_id": <int|null>, "occurred_at": <unix>}` —
+because door-sync always runs a whole-population reconcile; no other member data
+is sent. A contact id the trigger could not supply is sent as `null`, which the
+Worker reads as "unknown"; it is never sent as `0`.
+
+Note that the Worker overwrites `occurred_at` with its own receive time when it
+normalizes the event onto the queue, so today the field is advisory only.
+
+All of this lives in one dependency-free class,
+[`CRM_CivirulesActions_DoorSync_Contract`](CRM/CivirulesActions/DoorSync/Contract.php) —
+payload shape, key order, JSON flags, HMAC construction and header names. The
+action classes only handle settings, transport and logging.
+
+## Tests
+
+The contract is pinned on both sides of the wire by the same golden vector: here
+in `tests/phpunit/ContractTest.php`, and in the "CiviCRM producer contract" block
+of `door-webhook/test/index.spec.ts`. They need no CiviCRM bootstrap and no
+database — only PHP 8.2 or newer, which is phpunit 11's floor. That is a
+development requirement only; it says nothing about the PHP the extension
+itself supports:
+
+```bash
+composer install
+composer test
+```
+
+After changing `Contract.php`, regenerate the vector and update **both** repos —
+never edit the Worker's expected values to match new behaviour here, or the two
+ends drift apart and production webhooks start returning 401:
+
+```bash
+php bin/gen-vector.php
+```
+
+CI (`.github/workflows/ci.yml`) runs on every pull request: it syntax-checks the
+shipping code and runs the suite on PHP 8.2–8.4 (the deployment target is 8.3),
+and re-derives the golden vector from `Contract.php` to check the constants in
+`ContractTest.php` still match — so a failing contract test cannot be resolved
+by editing its expected values.
 
 ## Requirements
 

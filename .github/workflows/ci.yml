@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push supersedes an in-flight run for the same PR or branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    # The shipping code has to parse on the PHP the target site actually runs,
+    # which is 8.3, with a rung either side for margin. CiviCRM 5.75 allows PHP
+    # 7.4 at minimum, but linting down there would only forbid modern syntax on
+    # versions this extension is never deployed to. Widen this range if that
+    # stops being true.
+    #
+    # tests/ is excluded on purpose: it is never deployed, and it uses syntax
+    # aimed at the PHP the test job runs.
+    name: Lint (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Syntax-check shipping code
+        run: |
+          find CRM settings bin doorsync.php -name '*.php' -print0 \
+            | xargs -0 -n1 php -l
+
+  test:
+    # phpunit 11 requires PHP 8.2+, which is also where the lint range starts.
+    name: Test (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - uses: ramsey/composer-install@v4
+
+      # Pure unit tests over the wire contract; no CiviCRM bootstrap, so this
+      # needs no database and no CiviCRM checkout.
+      - name: Test
+        run: composer test
+
+  vector:
+    # The contract tests assert that the code produces a fixed golden vector,
+    # which door-webhook's suite asserts from the other side of the wire. That
+    # pairing breaks silently if someone resolves a failing test by editing its
+    # expected values instead of regenerating them, so re-derive the vector from
+    # the real code and require the test's constants to match it verbatim.
+    name: Golden vector is current
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Regenerate and compare
+        run: |
+          # Compare the two declaration sets as a whole. Checking only that each
+          # generated line appears somewhere in the test would still pass if the
+          # generator stopped emitting a constant, or if a stale one were left
+          # behind. Both sides are sorted because the generator and the test
+          # declare these in a different order — this is about set equality, not
+          # layout.
+          php bin/gen-vector.php \
+            | sed -n 's/^private const /  private const /p' | sort > expected.txt
+          test -s expected.txt || { echo "::error::generator emitted no constants"; exit 1; }
+
+          # VECTOR_CONTACT_ID is deliberately out of scope: it is an input to the
+          # vector rather than part of it, and ContractTest already fails if it
+          # drifts, since the body it builds would stop matching VECTOR_BODY.
+          grep -E '^  private const VECTOR_(BODY|TIMESTAMP|SIGNATURE) = ' \
+            tests/phpunit/ContractTest.php | sort > actual.txt
+
+          if ! diff -u expected.txt actual.txt; then
+            echo "::error::Golden vector in tests/phpunit/ContractTest.php is out of date"
+            echo "'-' lines are what bin/gen-vector.php produces; '+' lines are what the test asserts."
+            echo "Regenerate with 'php bin/gen-vector.php' and update BOTH repos."
+            exit 1
+          fi
+          echo "Golden vector matches the generator."
