@@ -34,11 +34,14 @@ return [
   'doorsync_webhook_secret' => [
     'name' => 'doorsync_webhook_secret',
     'title' => ts('door-sync webhook HMAC secret'),
-    'description' => ts('Shared HMAC secret. Must match CIVICRM_WEBHOOK_SECRET on the Worker exactly, or the Worker rejects every webhook with a 401.'),
+    'description' => ts('Shared HMAC secret. Must match CIVICRM_WEBHOOK_SECRET on the Worker exactly, or the Worker rejects every webhook with a 401. Masked on screen, but still readable in the page source — treat this page as showing the secret to anyone who can open it.'),
     'group_name' => 'Domain Preferences',
     'group' => 'doorsync',
     'type' => 'String',
-    'html_type' => 'text',
+    // Masks the value on screen. CRM_Admin_Form_SettingTrait populates defaults
+    // for every metadata-defined setting regardless of html_type, so the stored
+    // secret round-trips and is not wiped by saving the form.
+    'html_type' => 'password',
     'default' => '',
     'is_domain' => 1,
     'is_contact' => 0,
