@@ -11,9 +11,9 @@
   <urls>
     <url desc="Support">https://github.com/TechValleyCenterOfGravity</url>
   </urls>
-  <releaseDate>2026-07-09</releaseDate>
-  <version>1.0.0</version>
-  <develStage>alpha</develStage>
+  <releaseDate>2026-09-13</releaseDate>
+  <version>1.0.1</version>
+  <develStage>beta</develStage>
   <compatibility>
     <ver>5.75</ver>
   </compatibility>
