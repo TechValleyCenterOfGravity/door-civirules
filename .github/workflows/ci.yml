@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A new push supersedes an in-flight run for the same PR or branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    # The shipping code has to parse on every PHP a target site might run.
+    # CiviCRM 5.75 (info.xml's <ver>) allows PHP 7.4 at minimum, so that is the
+    # floor here even though development happens on much newer PHP.
+    #
+    # tests/ is excluded on purpose: it is never deployed, and it uses syntax
+    # (attributes, typed returns) aimed at the PHP the test job runs.
+    name: Lint (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Syntax-check shipping code
+        run: |
+          find CRM settings bin doorsync.php -name '*.php' -print0 \
+            | xargs -0 -n1 php -l
+
+  test:
+    # phpunit 11 requires PHP 8.2+. That is a dev-only floor — it says nothing
+    # about the PHP the extension itself supports, which the lint job covers.
+    name: Test (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - uses: ramsey/composer-install@v4
+
+      # Pure unit tests over the wire contract; no CiviCRM bootstrap, so this
+      # needs no database and no CiviCRM checkout.
+      - name: Test
+        run: composer test
+
+  vector:
+    # The contract tests assert that the code produces a fixed golden vector,
+    # which door-webhook's suite asserts from the other side of the wire. That
+    # pairing breaks silently if someone resolves a failing test by editing its
+    # expected values instead of regenerating them, so re-derive the vector from
+    # the real code and require the test's constants to match it verbatim.
+    name: Golden vector is current
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Regenerate and compare
+        run: |
+          php bin/gen-vector.php \
+            | sed -n 's/^private const /  private const /p' > expected.txt
+          test -s expected.txt || { echo "::error::generator produced no constants"; exit 1; }
+          # Read from a file, not a pipe: a subshell's exit would not fail the step.
+          while IFS= read -r line; do
+            grep -qxF "$line" tests/phpunit/ContractTest.php || {
+              echo "::error::Stale golden vector in tests/phpunit/ContractTest.php"
+              echo "Expected this line, from bin/gen-vector.php:"
+              echo "  $line"
+              echo "Regenerate with 'php bin/gen-vector.php' and update BOTH repos."
+              exit 1
+            }
+          done < expected.txt
+          echo "Golden vector matches the generator."
