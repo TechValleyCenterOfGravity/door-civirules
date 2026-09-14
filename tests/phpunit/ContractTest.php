@@ -1,4 +1,6 @@
 <?php
+// SPDX-FileCopyrightText: 2026 Tech Valley Center of Gravity
+// SPDX-License-Identifier: AGPL-3.0-only
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;

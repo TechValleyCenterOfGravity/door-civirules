@@ -1,5 +1,7 @@
 #!/usr/bin/env php
 <?php
+// SPDX-FileCopyrightText: 2026 Tech Valley Center of Gravity
+// SPDX-License-Identifier: AGPL-3.0-only
 
 /**
  * Regenerate the cross-repo golden vector from the real contract code.

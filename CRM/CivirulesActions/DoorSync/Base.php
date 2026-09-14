@@ -1,4 +1,6 @@
 <?php
+// SPDX-FileCopyrightText: 2026 Tech Valley Center of Gravity
+// SPDX-License-Identifier: AGPL-3.0-only
 
 /**
  * Base CiviRules action that POSTs an HMAC-signed payload to the door-webhook

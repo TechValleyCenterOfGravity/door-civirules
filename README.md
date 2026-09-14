@@ -167,3 +167,14 @@ instance, so verify after install:
 
 A `DoorSync_DayPassWebhook` action (→ `/civicrm/day-pass`) will be added for the
 visitor/day-pass flow, following the same `Base` pattern.
+
+## License
+
+Copyright © 2026 Tech Valley Center of Gravity
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License, version 3, as published by
+the Free Software Foundation. See [LICENSE](LICENSE) for the full text.
+
+Source files carry [SPDX](https://spdx.dev/) headers, so the notice travels with
+the code if a file is lifted out of this repository.
