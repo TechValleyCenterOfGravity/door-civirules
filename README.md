@@ -107,6 +107,15 @@ and any setting added there with `group => 'doorsync'` appears on it
 automatically. Access needs `administer CiviCRM` or the `administer doorsync`
 permission the mixin defines.
 
+The secret field has a **Generate** button, added by `js/settings.js` (loaded
+from `hook_civicrm_buildForm` in `doorsync.php`, since a generated page has no
+form class). It produces 32 random bytes as hex via `crypto.getRandomValues` —
+the same shape as `openssl rand -hex 32` — and reveals the value so it can be
+copied to the Worker, since the field is masked again on reload. The value is
+not stored until you save, so Cancel still discards it. If the browser exposes
+no CSPRNG the button is not offered at all; `Math.random()` is never used as a
+fallback.
+
 ## Create the CiviRule
 
 1. **Administer → Automation → CiviRules → New Rule.**

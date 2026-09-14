@@ -34,7 +34,7 @@ return [
   'doorsync_webhook_secret' => [
     'name' => 'doorsync_webhook_secret',
     'title' => ts('door-sync webhook HMAC secret'),
-    'description' => ts('Shared HMAC secret. Must match CIVICRM_WEBHOOK_SECRET on the Worker exactly, or the Worker rejects every webhook with a 401. Masked on screen, but still readable in the page source — treat this page as showing the secret to anyone who can open it.'),
+    'description' => ts('Shared HMAC secret. Must match CIVICRM_WEBHOOK_SECRET on the Worker exactly, or the Worker rejects every webhook with a 401. Use Generate for a fresh 32-byte value, then copy it to the Worker and save.'),
     'group_name' => 'Domain Preferences',
     'group' => 'doorsync',
     'type' => 'String',
