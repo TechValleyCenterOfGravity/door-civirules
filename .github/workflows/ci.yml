@@ -86,17 +86,26 @@ jobs:
 
       - name: Regenerate and compare
         run: |
+          # Compare the two declaration sets as a whole. Checking only that each
+          # generated line appears somewhere in the test would still pass if the
+          # generator stopped emitting a constant, or if a stale one were left
+          # behind. Both sides are sorted because the generator and the test
+          # declare these in a different order — this is about set equality, not
+          # layout.
           php bin/gen-vector.php \
-            | sed -n 's/^private const /  private const /p' > expected.txt
-          test -s expected.txt || { echo "::error::generator produced no constants"; exit 1; }
-          # Read from a file, not a pipe: a subshell's exit would not fail the step.
-          while IFS= read -r line; do
-            grep -qxF "$line" tests/phpunit/ContractTest.php || {
-              echo "::error::Stale golden vector in tests/phpunit/ContractTest.php"
-              echo "Expected this line, from bin/gen-vector.php:"
-              echo "  $line"
-              echo "Regenerate with 'php bin/gen-vector.php' and update BOTH repos."
-              exit 1
-            }
-          done < expected.txt
+            | sed -n 's/^private const /  private const /p' | sort > expected.txt
+          test -s expected.txt || { echo "::error::generator emitted no constants"; exit 1; }
+
+          # VECTOR_CONTACT_ID is deliberately out of scope: it is an input to the
+          # vector rather than part of it, and ContractTest already fails if it
+          # drifts, since the body it builds would stop matching VECTOR_BODY.
+          grep -E '^  private const VECTOR_(BODY|TIMESTAMP|SIGNATURE) = ' \
+            tests/phpunit/ContractTest.php | sort > actual.txt
+
+          if ! diff -u expected.txt actual.txt; then
+            echo "::error::Golden vector in tests/phpunit/ContractTest.php is out of date"
+            echo "'-' lines are what bin/gen-vector.php produces; '+' lines are what the test asserts."
+            echo "Regenerate with 'php bin/gen-vector.php' and update BOTH repos."
+            exit 1
+          fi
           echo "Golden vector matches the generator."
