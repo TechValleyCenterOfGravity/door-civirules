@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: 2026 Tech Valley Center of Gravity
+// SPDX-License-Identifier: AGPL-3.0-only
 /**
  * Adds a "Generate" control to the door-sync webhook secret field on
  * Administer > System Settings > Door-Sync CiviRules Webhook Settings.

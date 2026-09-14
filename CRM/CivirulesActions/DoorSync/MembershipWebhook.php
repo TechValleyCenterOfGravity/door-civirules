@@ -1,4 +1,6 @@
 <?php
+// SPDX-FileCopyrightText: 2026 Tech Valley Center of Gravity
+// SPDX-License-Identifier: AGPL-3.0-only
 
 /**
  * CiviRules action: POST a membership-change event to the door-webhook Worker.
