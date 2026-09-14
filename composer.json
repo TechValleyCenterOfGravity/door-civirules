@@ -1,7 +1,7 @@
 {
   "name": "tvcog/door-civirules",
   "description": "CiviRules action that POSTs an HMAC-signed webhook to the door-webhook Cloudflare Worker.",
-  "license": "AGPL-3.0-or-later",
+  "license": "AGPL-3.0-only",
   "autoload": {
     "psr-0": {
       "CRM_": ""
