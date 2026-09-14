@@ -59,10 +59,10 @@ php bin/gen-vector.php
 ```
 
 CI (`.github/workflows/ci.yml`) runs on every pull request: it syntax-checks the
-shipping code on PHP 7.4 through 8.4 (7.4 being CiviCRM 5.75's floor), runs the
-suite on 8.2–8.4, and re-derives the golden vector from `Contract.php` to check
-the constants in `ContractTest.php` still match — so a failing contract test
-cannot be resolved by editing its expected values.
+shipping code and runs the suite on PHP 8.2–8.4 (the deployment target is 8.3),
+and re-derives the golden vector from `Contract.php` to check the constants in
+`ContractTest.php` still match — so a failing contract test cannot be resolved
+by editing its expected values.
 
 ## Requirements
 
