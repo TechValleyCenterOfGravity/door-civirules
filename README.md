@@ -40,8 +40,10 @@ action classes only handle settings, transport and logging.
 
 The contract is pinned on both sides of the wire by the same golden vector: here
 in `tests/phpunit/ContractTest.php`, and in the "CiviCRM producer contract" block
-of `door-webhook/test/index.spec.ts`. These tests do not bootstrap CiviCRM, so
-they run anywhere PHP does:
+of `door-webhook/test/index.spec.ts`. They need no CiviCRM bootstrap and no
+database — only PHP 8.2 or newer, which is phpunit 11's floor. That is a
+development requirement only; it says nothing about the PHP the extension
+itself supports:
 
 ```bash
 composer install

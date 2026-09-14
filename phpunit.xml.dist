@@ -2,7 +2,9 @@
 <!--
   Unit tests for the wire contract only. These deliberately do not bootstrap
   CiviCRM: CRM_CivirulesActions_DoorSync_Contract has no CiviCRM dependencies,
-  so `composer test` runs anywhere PHP does, including CI.
+  so `composer test` needs no database and no CiviCRM checkout. It does need
+  PHP 8.2+, which is phpunit 11's requirement — a development floor only, not
+  a constraint on the extension itself.
 -->
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
