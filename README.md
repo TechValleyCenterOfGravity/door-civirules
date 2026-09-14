@@ -64,6 +64,27 @@ and re-derives the golden vector from `Contract.php` to check the constants in
 `ContractTest.php` still match — so a failing contract test cannot be resolved
 by editing its expected values.
 
+## Releasing
+
+Tagging `vX.Y.Z` builds an installable extension zip and publishes it as a
+GitHub release:
+
+```bash
+# bump <version> in info.xml first — the workflow refuses a tag that disagrees
+git tag v1.1.0 && git push origin v1.1.0
+```
+
+The package is `git archive` filtered through the `export-ignore` rules in
+`.gitattributes`, so it contains only the files a CiviCRM site needs —
+`info.xml`, `doorsync.php`, `civirules_actions.json`, `CRM/`, `settings/` and
+this README — inside a single `net.tvcog.doorsync/` directory, which is the
+layout CiviCRM's installer expects. Tests, CI config, `bin/` and the Composer
+files are excluded; `vendor/` never exists in a release because `composer.json`
+declares no runtime requires.
+
+Running the workflow by hand from a branch builds and verifies the same package
+as a dry run and attaches it as a build artifact, without publishing a release.
+
 ## Requirements
 
 - CiviRules (`org.civicoop.civirules`) installed and enabled **first**.

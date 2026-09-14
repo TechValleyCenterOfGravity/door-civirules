@@ -1,0 +1,173 @@
+name: Release
+
+# Tagging vX.Y.Z publishes a GitHub release with an installable CiviCRM
+# extension zip attached. Running this by hand from a branch builds and
+# verifies the same package as a dry run, without publishing anything.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# Read-only by default. Only the publish job below widens this, and only for
+# tag runs — a manual run from an arbitrary branch never holds a write token,
+# even though its workflow definition comes from that branch.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Package extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      key: ${{ steps.manifest.outputs.key }}
+      version: ${{ steps.manifest.outputs.version }}
+      zip: ${{ steps.manifest.outputs.zip }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # git archive needs no credentials, and leaving the token in
+          # .git/config would hand it to anything else running in this job.
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Read the manifest
+        id: manifest
+        run: |
+          key=$(php -r 'echo (string) simplexml_load_file("info.xml")["key"];')
+          version=$(php -r 'echo (string) simplexml_load_file("info.xml")->version;')
+
+          # info.xml is branch-controlled and these values become filenames,
+          # step outputs and release metadata. Reject anything outside the
+          # expected shape rather than trying to quote around it.
+          #
+          # `case`, not grep: grep matches per line, so a value like
+          # "1.0.0\nkey=evil" would pass a grep check on its first line while
+          # still forging extra step outputs. A case glob sees the whole string,
+          # newlines included. The leading-character rule additionally blocks
+          # ".." and a leading "-", which would otherwise survive the charset
+          # test and reach --prefix and unzip as traversal or as a flag.
+          reject() { echo "::error::info.xml $1"; exit 1; }
+
+          case "$key" in
+            '') reject "has no extension key" ;;
+            [!A-Za-z0-9]*) reject "key must start with a letter or digit" ;;
+            *[!A-Za-z0-9._-]*) reject "key has unexpected characters" ;;
+          esac
+
+          case "$version" in
+            '') reject "has no version" ;;
+            [!0-9]*) reject "version must start with a digit" ;;
+            *[!A-Za-z0-9._-]*) reject "version has unexpected characters" ;;
+          esac
+
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "zip=$key-$version.zip" >> "$GITHUB_OUTPUT"
+          echo "Packaging $key $version"
+
+      # A tag that disagrees with info.xml would publish a zip whose filename
+      # and manifest claim different versions, and CiviCRM reports the manifest
+      # one. Fail before anything is published rather than after.
+      - name: Tag matches info.xml version
+        if: github.ref_type == 'tag'
+        env:
+          VERSION: ${{ steps.manifest.outputs.version }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::tag $TAG does not match info.xml <version> (expected v$VERSION)"
+            exit 1
+          fi
+
+      # Manifest values reach these scripts through the environment, never by
+      # ${{ }} interpolation into the script body: an env var is data to the
+      # shell, whereas interpolation is substituted before the shell parses.
+      - name: Build the package
+        env:
+          KEY: ${{ steps.manifest.outputs.key }}
+          ZIP: ${{ steps.manifest.outputs.zip }}
+        run: |
+          # git archive honours the export-ignore rules in .gitattributes, so
+          # only tracked shipping files are included. CiviCRM expects a single
+          # top-level directory named for the extension key.
+          git archive --format=zip --prefix="$KEY/" -o "$ZIP" HEAD
+
+      - name: Verify the package
+        env:
+          KEY: ${{ steps.manifest.outputs.key }}
+          ZIP: ${{ steps.manifest.outputs.zip }}
+        run: |
+          unzip -l "$ZIP"
+
+          # Without the manifest at the root of that directory, CiviCRM does not
+          # see an extension here at all.
+          unzip -l "$ZIP" | grep -qF "$KEY/info.xml" \
+            || { echo "::error::$KEY/info.xml missing from the package"; exit 1; }
+
+          # Re-check the .gitattributes rules from outside, so a dropped
+          # export-ignore fails the release instead of quietly shipping tests
+          # or a composer.lock to a production site.
+          #
+          # Not named `path`: that is a special variable in some shells, and
+          # assigning it clobbers PATH.
+          for dev_path in tests/ .github/ bin/ vendor/ composer.json composer.lock \
+                          phpunit.xml.dist .gitignore .gitattributes; do
+            if unzip -l "$ZIP" | grep -qF "$KEY/$dev_path"; then
+              echo "::error::development file leaked into the package: $dev_path"
+              exit 1
+            fi
+          done
+
+          # Whatever does ship has to parse and carry a well-formed manifest.
+          rm -rf verify && mkdir verify && unzip -q "$ZIP" -d verify
+          find "verify/$KEY" -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -r '
+            $x = simplexml_load_file($argv[1]);
+            if (!$x) { fwrite(STDERR, "info.xml is not well-formed\n"); exit(1); }
+            echo "manifest ok: ", $x["key"], " ", $x->version, "\n";
+          ' "verify/$KEY/info.xml"
+          rm -rf verify
+
+      # Always kept, so a dry run from a branch still hands back the artifact
+      # to inspect or install by hand.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.manifest.outputs.key }}-${{ steps.manifest.outputs.version }}
+          path: ${{ steps.manifest.outputs.zip }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: package
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # The only write token in this workflow, and only on a tag run.
+    permissions:
+      contents: write
+    steps:
+      # Deliberately no checkout: nothing from the branch executes in the job
+      # that holds the write token. The artifact and gh are all it needs.
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.package.outputs.key }}-${{ needs.package.outputs.version }}
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          ZIP: ${{ needs.package.outputs.zip }}
+          TITLE: ${{ needs.package.outputs.key }} ${{ needs.package.outputs.version }}
+        run: |
+          test -f "$ZIP" || { echo "::error::$ZIP missing from the artifact"; exit 1; }
+          gh release create "$TAG" "$ZIP" --title "$TITLE" --generate-notes
