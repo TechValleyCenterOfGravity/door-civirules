@@ -57,7 +57,7 @@ CRM.$(function ($) {
     // the Worker, and it is masked again as soon as the page reloads.
     $field.val(generateSecret()).attr('type', 'text').trigger('change');
     $hint
-      .text(ts('Copy this value to the Worker (CIVICRM_WEBHOOK_SECRET), then save. It is masked again after the page reloads, and the Worker rejects every webhook until both sides match.'))
+      .text(ts('Copy this value to the Worker (CIVICRM_WEBHOOK_SECRET), then save. The Worker rejects every webhook until both sides match.'))
       .show();
   });
 });
