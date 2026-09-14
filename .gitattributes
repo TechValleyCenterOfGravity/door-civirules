@@ -1,0 +1,14 @@
+# Controls what `git archive` puts in the release package (see
+# .github/workflows/release.yml). Everything listed here is development-only
+# and must not ship to a CiviCRM site.
+#
+# vendor/ is absent by construction: composer.json declares no runtime
+# requires, only phpunit, so a site never needs it.
+/.gitattributes export-ignore
+/.github       export-ignore
+/.gitignore    export-ignore
+/bin           export-ignore
+/composer.json export-ignore
+/composer.lock export-ignore
+/phpunit.xml.dist export-ignore
+/tests         export-ignore

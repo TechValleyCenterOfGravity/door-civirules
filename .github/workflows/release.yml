@@ -1,0 +1,116 @@
+name: Release
+
+# Tagging vX.Y.Z publishes a GitHub release with an installable CiviCRM
+# extension zip attached. Running this by hand from a branch builds and
+# verifies the same package as a dry run, without publishing anything.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Package extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Read the manifest
+        id: manifest
+        run: |
+          key=$(php -r 'echo (string) simplexml_load_file("info.xml")["key"];')
+          version=$(php -r 'echo (string) simplexml_load_file("info.xml")->version;')
+          if [ -z "$key" ] || [ -z "$version" ]; then
+            echo "::error::could not read key/version from info.xml"
+            exit 1
+          fi
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "zip=$key-$version.zip" >> "$GITHUB_OUTPUT"
+          echo "Packaging $key $version"
+
+      # A tag that disagrees with info.xml would publish a zip whose filename
+      # and manifest claim different versions, and CiviCRM reports the manifest
+      # one. Fail before anything is published rather than after.
+      - name: Tag matches info.xml version
+        if: github.ref_type == 'tag'
+        run: |
+          expected="v${{ steps.manifest.outputs.version }}"
+          if [ "$GITHUB_REF_NAME" != "$expected" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match info.xml <version> (expected $expected)"
+            exit 1
+          fi
+
+      - name: Build the package
+        run: |
+          # git archive honours the export-ignore rules in .gitattributes, so
+          # only tracked shipping files are included. CiviCRM expects a single
+          # top-level directory named for the extension key.
+          git archive --format=zip \
+            --prefix='${{ steps.manifest.outputs.key }}/' \
+            -o '${{ steps.manifest.outputs.zip }}' HEAD
+
+      - name: Verify the package
+        run: |
+          key='${{ steps.manifest.outputs.key }}'
+          zip='${{ steps.manifest.outputs.zip }}'
+          unzip -l "$zip"
+
+          # Without the manifest at the root of that directory, CiviCRM does not
+          # see an extension here at all.
+          unzip -l "$zip" | grep -qF "$key/info.xml" \
+            || { echo "::error::$key/info.xml missing from the package"; exit 1; }
+
+          # Re-check the .gitattributes rules from outside, so a dropped
+          # export-ignore fails the release instead of quietly shipping tests
+          # or a composer.lock to a production site.
+          # Not named `path`: that is a special variable in some shells, and
+          # assigning it clobbers PATH.
+          for dev_path in tests/ .github/ bin/ vendor/ composer.json composer.lock \
+                          phpunit.xml.dist .gitignore .gitattributes; do
+            if unzip -l "$zip" | grep -qF "$key/$dev_path"; then
+              echo "::error::development file leaked into the package: $dev_path"
+              exit 1
+            fi
+          done
+
+          # Whatever does ship has to parse and carry a well-formed manifest.
+          rm -rf verify && mkdir verify && unzip -q "$zip" -d verify
+          find "verify/$key" -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -r '
+            $x = simplexml_load_file($argv[1]);
+            if (!$x) { fwrite(STDERR, "info.xml is not well-formed\n"); exit(1); }
+            echo "manifest ok: ", $x["key"], " ", $x->version, "\n";
+          ' "verify/$key/info.xml"
+          rm -rf verify
+
+      # Always kept, so a dry run from a branch still hands back the artifact
+      # to inspect or install by hand.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.manifest.outputs.key }}-${{ steps.manifest.outputs.version }}
+          path: ${{ steps.manifest.outputs.zip }}
+          if-no-files-found: error
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            '${{ steps.manifest.outputs.zip }}' \
+            --title '${{ steps.manifest.outputs.key }} ${{ steps.manifest.outputs.version }}' \
+            --generate-notes
